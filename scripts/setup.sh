@@ -123,11 +123,11 @@ process_operator_config() {
   # The merged configuration file is saved in the Kafka configuration directory and move the file to operator configuration.
   roles=$(grep process.roles "$operator_config" | cut -d'=' -f 2-)
   if [[ $roles = "controller" ]]; then
-    /opt/kafka/user-scripts/merge_custom_config.sh $controller_custom_config $operator_config $kafka_config_dir/config.properties.merged
+    /opt/kafka/init-scripts/merge_custom_config.sh $controller_custom_config $operator_config $kafka_config_dir/config.properties.merged
   elif [[ $roles = "broker" ]]; then
-    /opt/kafka/user-scripts/merge_custom_config.sh $broker_custom_config $operator_config $kafka_config_dir/config.properties.merged
+    /opt/kafka/init-scripts/merge_custom_config.sh $broker_custom_config $operator_config $kafka_config_dir/config.properties.merged
   else [[ $roles = "broker,controller" || $roles = "controller,broker" ]]
-    /opt/kafka/user-scripts/merge_custom_config.sh $server_custom_config $operator_config $kafka_config_dir/config.properties.merged
+    /opt/kafka/init-scripts/merge_custom_config.sh $server_custom_config $operator_config $kafka_config_dir/config.properties.merged
   fi
 
   # update from env
@@ -147,7 +147,7 @@ process_operator_config() {
   local envs_config_dir="$kafka_config_dir/config_envs.properties"
   convert_envs_to_properties exclude_envs "$envs_config_dir" "KAFKA_"
   debug "Merging envs configuration with final config"
-  /opt/kafka/user-scripts/merge_custom_config.sh $envs_config_dir $operator_config $kafka_config_dir/config.properties.merged
+  /opt/kafka/init-scripts/merge_custom_config.sh $envs_config_dir $operator_config $kafka_config_dir/config.properties.merged
   if [ -e "$envs_config_dir" ]; then
     rm "$envs_config_dir"
   fi
