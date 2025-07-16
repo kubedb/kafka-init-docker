@@ -148,7 +148,7 @@ process_operator_config() {
   convert_envs_to_properties exclude_envs "$envs_config_dir" "KAFKA_"
   debug "Merging envs configuration with final config"
   /opt/kafka/init-scripts/merge_custom_config.sh $envs_config_dir $operator_config $kafka_config_dir/config.properties.merged
-  if [ -e "$envs_config_dir" ]; then
+  if [[ -e "$envs_config_dir" ]]; then
     rm "$envs_config_dir"
   fi
 

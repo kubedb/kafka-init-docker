@@ -28,12 +28,12 @@ reserved_protocol=("broker" "controller" "local")
 # Exit if $master_file doesn't exist
 # Exit if $slave_file doesn't exist
 # Delete the previous output file if exists
-if [ ! -e "$master_file" ] ; then
+if [[ ! -e "$master_file" ]] ; then
     exit
-elif [ ! -e "$slave_file" ] ; then
+elif [[ ! -e "$slave_file" ]] ; then
     error "Unable to merge custom configuration property files: $slave_file doesn't exist"
     exit 1
-else [ -e "$output_file" ]
+elif [[ -e "$output_file" ]] ; then
     rm -rf "$output_file"
 fi
 info "Merging configs"
