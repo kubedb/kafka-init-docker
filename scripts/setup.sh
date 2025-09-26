@@ -212,8 +212,8 @@ update_configuration() {
   # If $process_roles is not controller and /opt/kafka/init-scripts/rack.properties file exists,
   # append or replace rack.id in final_config_path
   if [[ "$process_roles" != "controller" && -f /opt/kafka/init-scripts/rack.properties ]]; then
-    if grep -q "^rack.id=" "$final_config_path"; then
-      sed -i "s/^rack.id=.*/$(grep '^rack.id=' /opt/kafka/init-scripts/rack.properties)/" "$final_config_path"
+    if grep -q "^broker.rack=" "$final_config_path"; then
+      sed -i "s/^broker.rack=.*/$(grep '^broker.rack=' /opt/kafka/init-scripts/rack.properties)/" "$final_config_path"
     else
       cat /opt/kafka/init-scripts/rack.properties >> "$final_config_path"
     fi
