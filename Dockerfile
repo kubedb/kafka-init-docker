@@ -5,7 +5,7 @@ ARG TARGETOS
 ARG TARGETARCH
 
 # Install necessary dependencies
-RUN apk add --no-cache
+RUN apk add --no-cache curl jq
 COPY init-scripts /init-scripts
 COPY scripts /tmp/scripts
 
