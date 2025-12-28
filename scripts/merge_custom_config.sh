@@ -28,19 +28,19 @@ reserved_protocol=("broker" "controller" "local")
 # Exit if $master_file doesn't exist
 # Exit if $slave_file doesn't exist
 # Delete the previous output file if exists
-if [[ ! -e "$master_file" ]] ; then
+if [[ ! -e "$master_file" ]]; then
     exit
-elif [[ ! -e "$slave_file" ]] ; then
+elif [[ ! -e "$slave_file" ]]; then
     error "Unable to merge custom configuration property files: $slave_file doesn't exist"
     exit 1
-elif [[ -e "$output_file" ]] ; then
+elif [[ -e "$output_file" ]]; then
     rm -rf "$output_file"
 fi
 info "Merging configs"
 
 # Read property files into arrays
-readarray master_file_a < "$master_file"
-readarray slave_file_a < "$slave_file"
+readarray master_file_a <"$master_file"
+readarray slave_file_a <"$slave_file"
 # This script declares an associative array named "all_properties".
 declare -A all_properties
 
@@ -49,12 +49,12 @@ for slave_file_line in "${slave_file_a[@]}"; do
     slave_property_name=$(echo "$slave_file_line" | cut -d = -f1 | tr -d '[:space:]')
     # If it contains whitespace or comment, the loop continues to the next iteration.
     if [[ "$slave_property_name" =~ $WHITESPACE_REGEX || "$slave_property_name" =~ $COMMENT_LINE_REGEX ]]; then
-      continue
+        continue
     fi
     # Only attempt to get the property value if it exists
     if [[ "$slave_file_line" =~ $HAS_VALUE_REGEX ]]; then
-      slave_property_value=$(echo "$slave_file_line" | cut -d = -f2-)
-      all_properties["$slave_property_name"]="$slave_property_value"
+        slave_property_value=$(echo "$slave_file_line" | cut -d = -f2-)
+        all_properties["$slave_property_name"]="$slave_property_value"
     fi
 done
 # The script loops through each line of the master file and extracts the property name and value.
@@ -78,39 +78,39 @@ for master_file_line in "${master_file_a[@]}"; do
         master_property_value=''
     fi
     if [[ "$master_property_name" == "listeners" || "$master_property_name" == "listener.security.protocol.map" ]]; then
-      # If the property is 'listeners' or 'listener.security.protocol.map', we append the new protocol to the existing value
-      IFS=','
-      for element in $master_property_value; do
-          IFS=':'
-          read -r  property _ <<< "$(echo "$element" | tr '[:upper:]' '[:lower:]')"
-          if ! printf "%s\n" "${reserved_protocol[@]}" | grep -Fxq "$property"; then
-              all_properties["$master_property_name"]="${all_properties["$master_property_name"]},${element}"
-          fi
-      done
+        # If the property is 'listeners' or 'listener.security.protocol.map', we append the new protocol to the existing value
+        IFS=','
+        for element in $master_property_value; do
+            IFS=':'
+            read -r property _ <<<"$(echo "$element" | tr '[:upper:]' '[:lower:]')"
+            if ! printf "%s\n" "${reserved_protocol[@]}" | grep -Fxq "$property"; then
+                all_properties["$master_property_name"]="${all_properties["$master_property_name"]},${element}"
+            fi
+        done
     elif [[ "$master_property_name" =~ \.advertised\.listeners$ || "$master_property_name" =~ \.listeners$ ]]; then
-      IFS=',' read -r -a listener_array <<< "$master_property_value"
-      id="${HOSTNAME##*-}"
-      length="${#listener_array[@]}"
-      prefix="${master_property_name%%.*}"
-      key="${master_property_name#*.}"
-      debug "Updating $key for broker id = $id, protocol = $prefix"
-      if printf "%s\n" "${reserved_protocol[@]}" | grep -Fxq "$prefix"; then
-          warn "$master_property_name is a reserved protocol, continuing without setting it"
-          continue
-      fi
-      if [ "$length" -le "$id" ]; then
-        error "$master_property_name is not set for broker id = $id, stopping immediately"
-        exit 1
-      fi
-      # Update the all_properties map with the determined key
-      all_properties["$key"]="${all_properties["$key"]},${listener_array[${id}]}"
+        IFS=',' read -r -a listener_array <<<"$master_property_value"
+        id="${HOSTNAME##*-}"
+        length="${#listener_array[@]}"
+        prefix="${master_property_name%%.*}"
+        key="${master_property_name#*.}"
+        debug "Updating $key for broker id = $id, protocol = $prefix"
+        if printf "%s\n" "${reserved_protocol[@]}" | grep -Fxq "$prefix"; then
+            warn "$master_property_name is a reserved protocol, continuing without setting it"
+            continue
+        fi
+        if [ "$length" -le "$id" ]; then
+            error "$master_property_name is not set for broker id = $id, stopping immediately"
+            exit 1
+        fi
+        # Update the all_properties map with the determined key
+        all_properties["$key"]="${all_properties["$key"]},${listener_array[${id}]}"
     else
-      all_properties["$master_property_name"]="$master_property_value"
+        all_properties["$master_property_name"]="$master_property_value"
     fi
 done
 
 for key in "${!all_properties[@]}"; do
-    echo "$key=${all_properties[$key]}" >> "$output_file"
+    echo "$key=${all_properties[$key]}" >>"$output_file"
 done
 # move merged file to slave file
 mv "$output_file" "$slave_file"
