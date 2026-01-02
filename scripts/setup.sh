@@ -14,6 +14,7 @@ final_config_path="$config_dir/kafka.properties"
 kafka_config_dir="$config_dir/kafkaconfig"
 operator_config="$config_dir/kafkaconfig/config.properties"
 # KubeDB operator configuration files
+temp_apply_config="/opt/kafka/config/temp-config/apply.config.properties"
 temp_operator_config="$config_dir/temp-config/config.properties"
 temp_ssl_config="$config_dir/temp-config/ssl.properties"
 temp_clientauth_config="$config_dir/temp-config/clientauth.properties"
@@ -129,6 +130,8 @@ process_operator_config() {
   else [[ $roles = "broker,controller" || $roles = "controller,broker" ]]
     /opt/kafka/init-scripts/merge_custom_config.sh $server_custom_config $operator_config $kafka_config_dir/config.properties.merged
   fi
+  # If a file named $temp_apply_config exists, it merges the file with the operator configuration file(apply config)
+  /opt/kafka/config/merge_custom_config.sh $temp_apply_config $operator_config $kafka_config_dir/config.properties.merged
 
   # update from env
   exclude_envs=(
