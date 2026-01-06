@@ -131,7 +131,7 @@ process_operator_config() {
     /opt/kafka/init-scripts/merge_custom_config.sh $server_custom_config $operator_config $kafka_config_dir/config.properties.merged
   fi
   # If a file named $temp_apply_config exists, it merges the file with the operator configuration file(apply config)
-  /opt/kafka/config/merge_custom_config.sh $temp_apply_config $operator_config $kafka_config_dir/config.properties.merged
+  /opt/kafka/init-scripts/merge_custom_config.sh $temp_apply_config $operator_config $kafka_config_dir/config.properties.merged
 
   # update from env
   exclude_envs=(
