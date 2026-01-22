@@ -28,4 +28,16 @@ if [[ -n "${TOPOLOGY_KEY:-}" && -n "${NODE_NAME:-}" ]]; then
   echo "Set broker.rack=$LABEL_VALUE for node $NODE_NAME"
 fi
 
+# Tiered Storage Plugin Setup
+if [[ -n ${TIERED_STORAGE_PROVIDER:-} ]]; then
+  cp -r /tmp/plugin/core/*.jar /opt/kafka/libs/tiered-plugins/
+
+  # if the value other than s3, gcs, azure, local, exit with error
+  if [[ ! "$TIERED_STORAGE_PROVIDER" =~ ^(s3|gcs|azure|local)$ ]]; then
+    echo "Error: Invalid TIERED_STORAGE_PROVIDER value: $TIERED_STORAGE_PROVIDER. Supported values are s3, gcs, azure, local." >&2
+    exit 1
+  fi
+  cp -r /tmp/plugin/${TIERED_STORAGE_PROVIDER}/*.jar /opt/kafka/libs/tiered-plugins/
+fi
+
 echo "Kafka Initializing Done!!"
