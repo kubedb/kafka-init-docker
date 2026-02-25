@@ -2,11 +2,11 @@
 
 set -o errexit
 set -o nounset
-set -o pipefail
+# set -o pipefail
 # set -o xtrace # Uncomment this line for debugging purposes
 
 cp -r /tmp/scripts/* /opt/kafka/init-scripts
-if [[ -n "${TOPOLOGY_KEY:-}" && -n "${NODE_NAME:-}" ]]; then
+if [ -n "${TOPOLOGY_KEY:-}" ] && [ -n "${NODE_NAME:-}" ]; then
   TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
   APISERVER="https://kubernetes.default.svc"
   CACERT="/var/run/secrets/kubernetes.io/serviceaccount/ca.crt"
@@ -26,6 +26,23 @@ if [[ -n "${TOPOLOGY_KEY:-}" && -n "${NODE_NAME:-}" ]]; then
   fi
   echo "broker.rack=$LABEL_VALUE" >> /opt/kafka/init-scripts/rack.properties
   echo "Set broker.rack=$LABEL_VALUE for node $NODE_NAME"
+fi
+
+# Tiered Storage Plugin Setup
+if [ -n "${TIERED_STORAGE_PROVIDER:-}" ]; then
+  cp -r /tmp/plugin/core/*.jar /opt/kafka/libs/tiered-plugins/
+
+  # if the value other than s3, gcs, azure, local, exit with error
+  case "$TIERED_STORAGE_PROVIDER" in
+    s3|gcs|azure|local)
+      # valid
+      ;;
+    *)
+      echo "Error: Invalid TIERED_STORAGE_PROVIDER value: $TIERED_STORAGE_PROVIDER. Supported values are s3, gcs, azure, local." >&2
+      exit 1
+      ;;
+  esac
+  cp -r /tmp/plugin/${TIERED_STORAGE_PROVIDER}/*.jar /opt/kafka/libs/tiered-plugins/
 fi
 
 echo "Kafka Initializing Done!!"

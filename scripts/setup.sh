@@ -221,6 +221,16 @@ update_configuration() {
       cat /opt/kafka/init-scripts/rack.properties >> "$final_config_path"
     fi
   fi
+  # tiered storage backend credentials
+  if [[ -n "${AZURE_ACCOUNT_KEY:-}" ]]; then
+    sed -i "s|\<AZURE_ACCOUNT_KEY\>|"$AZURE_ACCOUNT_KEY"|g" $final_config_path
+  fi
+  if [[ -n "${AWS_ACCESS_KEY_ID:-}" ]]; then
+    sed -i "s|\<AWS_ACCESS_KEY_ID\>|"$AWS_ACCESS_KEY_ID"|g" $final_config_path
+  fi
+  if [[ -n "${AWS_SECRET_ACCESS_KEY:-}" ]]; then
+    sed -i "s|\<AWS_SECRET_ACCESS_KEY\>|"$AWS_SECRET_ACCESS_KEY"|g" $final_config_path
+  fi
 
   info "Updated configuration file by process_roles"
 }

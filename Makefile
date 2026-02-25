@@ -4,6 +4,7 @@ REGISTRY   ?= ghcr.io/kubedb
 BIN        ?= kafka-init
 IMAGE      := $(REGISTRY)/$(BIN)
 TAG        ?= $(shell git describe --exact-match --abbrev=0 2>/dev/null || echo "")
+TIERED_STORAGE_VERSION ?= 1.1.1
 
 DOCKER_PLATFORMS := linux/amd64 linux/arm64
 PLATFORM         ?= linux/$(subst x86_64,amd64,$(subst aarch64,arm64,$(shell uname -m)))
@@ -26,7 +27,7 @@ all-push: $(addprefix push-, $(subst /,_,$(DOCKER_PLATFORMS)))
 .PHONY: container
 container:
 	@echo "container: $(IMAGE):$(VERSION)"
-	@docker buildx build --platform $(PLATFORM) --load --pull -t $(IMAGE):$(VERSION) -f Dockerfile .
+	@docker buildx build --build-arg "TIERED_STORAGE_VERSION=$(TIERED_STORAGE_VERSION)" --platform $(PLATFORM) --load --pull -t $(IMAGE):$(VERSION) -f Dockerfile .
 	@echo
 
 push: container
