@@ -64,19 +64,6 @@ delete_cluster_metadata() {
   done
 
   log_dirs=$(IFS=','; echo "${modified_log_dirs[*]}")
-  # Create or update the metadata log directory
-  if [[ ! -d "$metadata_log_dir" ]]; then
-    mkdir -p $metadata_log_dir
-    info "Created kafka metadata directory at $metadata_log_dir"
-  elif [[ -e "$metadata_log_dir/meta.properties" ]]; then
-     rm -rf "$metadata_log_dir/meta.properties"
-  fi
-  # Delete previously configured controller.quorum.voters file
-  if [[ -e "$metadata_log_dir/__cluster_metadata-0/quorum-state" ]]; then
-     rm -rf "$metadata_log_dir/__cluster_metadata-0/quorum-state"
-  fi
-  # Add or replace cluster_id to metadata_log_dir/cluster_id
-  echo "$KAFKA_CLUSTER_ID" > "$metadata_log_dir/cluster_id"
 }
 
 # Function to update the advertised listeners by modifying BROKER:// listeners adding the hostname prefix
