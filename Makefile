@@ -3,7 +3,7 @@ SHELL=/bin/bash -o pipefail
 REGISTRY   ?= ghcr.io/kubedb
 BIN        ?= kafka-init
 IMAGE      := $(REGISTRY)/$(BIN)
-TAG        ?= $(shell git describe --exact-match --abbrev=0 2>/dev/null || echo "")
+TAG        ?= $(shell git describe --tags --exact-match --abbrev=0 2>/dev/null || echo "")
 TIERED_STORAGE_VERSION ?= 1.1.1
 
 DOCKER_PLATFORMS := linux/amd64 linux/arm64
