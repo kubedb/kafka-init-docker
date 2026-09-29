@@ -5,7 +5,7 @@ set -o nounset
 set -o pipefail
 # set -o xtrace # Uncomment this line for debugging purposes
 
-. /opt/kafka/scripts/lib.sh
+. /opt/kafka/init-scripts/lib.sh
 
 # Regular expression to match any line that contains only whitespace characters
 WHITESPACE_REGEX='^[[:space:]]*$'
