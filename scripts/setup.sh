@@ -5,23 +5,30 @@ set -o nounset
 set -o pipefail
 # set -o xtrace # Uncomment this line for debugging purposes
 
-. /opt/kafka/scripts/lib.sh
+# Runs in the "kafka-setup" init container, which uses the database image (KubeDB or Confluent).
+# It builds the final broker/controller configuration and formats storage. The main container
+# then only starts Kafka (see launch.sh).
+
+. /opt/kafka/init-scripts/lib.sh
+
+export KAFKA_CLUSTER_ID=${KAFKA_CLUSTER_ID:-4L6g3nShT-eMCtK--X86sw}
 
 config_dir=/opt/kafka/config
-# Final Configuration Path, kafka start will use this configuration
-final_config_path="$config_dir/kafka.properties"
-# KubeDB operator empty directory
+# KubeDB operator empty directory, shared with the main container
 kafka_config_dir="$config_dir/kafkaconfig"
-operator_config="$config_dir/kafkaconfig/config.properties"
+# Final Configuration Path, kafka start will use this configuration
+final_config_path="$kafka_config_dir/kafka.properties"
+operator_config="$kafka_config_dir/config.properties"
 # KubeDB operator configuration files
-temp_inline_config="/opt/kafka/config/temp-config/inline.properties"
+temp_inline_config="$config_dir/temp-config/inline.properties"
 temp_operator_config="$config_dir/temp-config/config.properties"
 temp_ssl_config="$config_dir/temp-config/ssl.properties"
 temp_clientauth_config="$config_dir/temp-config/clientauth.properties"
-# Kafka configuration files from 4.0.0
-controller_config="$config_dir/controller.properties"
-broker_config="$config_dir/broker.properties"
-server_config="$config_dir/server.properties"
+# Default configuration files shipped with the image
+default_config_dir="$(image_config_dir)"
+controller_config="$default_config_dir/controller.properties"
+broker_config="$default_config_dir/broker.properties"
+server_config="$default_config_dir/server.properties"
 # KubeDB Custom configuration files
 server_custom_config="$config_dir/custom-config/server.properties"
 broker_custom_config="$config_dir/custom-config/broker.properties"
@@ -102,9 +109,9 @@ process_operator_config() {
   cp "$temp_operator_config" "$operator_config"
   # If a temporary SSL configuration file exists, it concatenates the contents of the temporary SSL configuration file to operator configuration file.
   if [[ -f "$temp_ssl_config" ]]; then
-    cat $temp_ssl_config $operator_config > config.properties.updated
-    mv config.properties.updated $operator_config
-    cp $temp_ssl_config $config_dir
+    cat $temp_ssl_config $operator_config > "$kafka_config_dir/config.properties.updated"
+    mv "$kafka_config_dir/config.properties.updated" $operator_config
+    cp $temp_ssl_config $kafka_config_dir
   fi
 
   # and merges the custom configuration files based on the process roles specified in the operator configuration file.
@@ -142,15 +149,15 @@ process_operator_config() {
     rm "$envs_config_dir"
   fi
 
-  # If a file named $temp_clientauth_config exists, it copies the file to /opt/kafka/config directory.
+  # If a file named $temp_clientauth_config exists, it copies the file to the shared kafka config directory.
   if [[ -f $temp_clientauth_config ]]; then
-    cp $temp_clientauth_config $config_dir
+    cp $temp_clientauth_config $kafka_config_dir
   fi
 
   # If KAFKA_PASSWORD is not empty,
   # replace the placeholders <KAFKA_USER> and <KAFKA_PASSWORD> in clientauth.properties and operator_config files
-  if [[ $KAFKA_PASSWORD != "" ]]; then
-    CLIENTAUTHFILE="$config_dir/clientauth.properties"
+  if [[ ${KAFKA_PASSWORD:-} != "" ]]; then
+    CLIENTAUTHFILE="$kafka_config_dir/clientauth.properties"
     sed -i "s/\<KAFKA_USER\>/"$KAFKA_USER"/g" $CLIENTAUTHFILE
     sed -i "s/\<KAFKA_PASSWORD\>/"$KAFKA_PASSWORD"/g" $CLIENTAUTHFILE
 
@@ -184,20 +191,20 @@ update_configuration() {
     delete_cluster_metadata $ID
     echo "node.id=$ID" >> "$operator_config"
     sed -i "s|"^log.dirs=$old_log_dirs"|"log.dirs=$log_dirs"|" "$operator_config"
-    cat $operator_config $controller_config | awk -F= '!seen[$1]++' > "$controller_config.updated"
-    mv "$controller_config.updated" "$final_config_path"
+    merge_properties_first_wins "$operator_config" "$controller_config" > "$final_config_path.updated"
+    mv "$final_config_path.updated" "$final_config_path"
   elif [[ "$process_roles" = "broker" ]]; then
     delete_cluster_metadata $ID
     echo "node.id=$ID" >> "$operator_config"
     sed -i "s|"^log.dirs=$old_log_dirs"|"log.dirs=$log_dirs"|" "$operator_config"
-    cat "$operator_config" "$broker_config" | awk -F'=' '!seen[$1]++' > "$broker_config.updated"
-    mv "$broker_config.updated" "$final_config_path"
+    merge_properties_first_wins "$operator_config" "$broker_config" > "$final_config_path.updated"
+    mv "$final_config_path.updated" "$final_config_path"
   else [[ "$process_roles" = "broker,controller" || "$process_roles" = "controller,broker" ]]
     delete_cluster_metadata "$ID"
     echo "node.id=$ID" >> "$operator_config"
     sed -i "s|"^log.dirs=$old_log_dirs"|"log.dirs=$log_dirs"|" "$operator_config"
-    cat "$operator_config" "$server_config" | awk -F'=' '!seen[$1]++' > "$server_config.updated"
-    mv "$server_config.updated" "$final_config_path"
+    merge_properties_first_wins "$operator_config" "$server_config" > "$final_config_path.updated"
+    mv "$final_config_path.updated" "$final_config_path"
   fi
   # If $process_roles is not controller and /opt/kafka/init-scripts/rack.properties file exists,
   # append or replace rack.id in final_config_path
@@ -226,53 +233,111 @@ copy_custom_log4j_if_exists() {
   # If user has provided custom log4j configuration, it will be used
   if [[ -f "$custom_log4j_config" ]]; then
     debug "** Copying custom log4j configuration **"
-    cp "$custom_log4j_config" $config_dir
+    cp "$custom_log4j_config" $kafka_config_dir
   fi
   # If user has provided custom tools-log4j configuration, it will be used
   if [[ -f "$custom_tools_log4j_config" ]]; then
     debug "** Copying custom tools-log4j configuration **"
-    cp "$custom_tools_log4j_config" $config_dir
+    cp "$custom_tools_log4j_config" $kafka_config_dir
   fi
 }
 
-addKafkactlConfig() {
-  if [[ "$process_roles" == "controller" ]]; then
-    return
-  fi
-  kafkactl_config_path="/opt/kafka/.config/kafkactl/config.yml"
-  mkdir -p "$(dirname "$kafkactl_config_path")"
-  cat <<EOL > "$kafkactl_config_path"
-contexts:
-  default:
-    brokers:
-      - "localhost:9092"
-EOL
-  CLIENTAUTHFILE="$config_dir/clientauth.properties"
-  if [[ -f "$CLIENTAUTHFILE" ]]; then
-    cat <<EOL >> "$kafkactl_config_path"
-    sasl:
-      enabled: true
-      mechanism: plaintext
-      username: "$KAFKA_USER"
-      password: "$KAFKA_PASSWORD"
-EOL
-    if grep -Ei "^security\.protocol=sasl_ssl" "$CLIENTAUTHFILE"; then
-    cat <<EOL >> "$kafkactl_config_path"
-    tls:
-      enabled: true
-      ca: "/var/private/ssl/ca.crt"
-      cert: "/var/private/ssl/tls.crt"
-      certKey: "/var/private/ssl/tls.key"
-      insecure: false
-EOL
+add_scram_credentials() {
+  for (( i = 0; i < 2; i++ )); do
+    algo_type="$((256 + i * 256))"
+    users_var="KAFKA_SCRAM_${algo_type}_USERS"
+    passwords_var="KAFKA_SCRAM_${algo_type}_PASSWORDS"
+
+    users_value="${!users_var:-}"
+    passwords_value="${!passwords_var:-}"
+
+    if [[ -n "$users_value" && -n "$passwords_value" ]]; then
+      debug "Adding SCRAM-SHA-${algo_type} credentials"
+      IFS=',' read -ra users <<< "$users_value"
+      IFS=',' read -ra passwords <<< "$passwords_value"
+      for index in "${!users[@]}"; do
+        if [[ -n "${users[$index]}" && -n "${passwords[$index]:-}" ]]; then
+          storage_args+=("--add-scram" "SCRAM-SHA-${algo_type}=[name=${users[$index]},password=${passwords[$index]}]")
+        fi
+      done
     fi
+  done
+}
+
+format_storage() {
+  storage_args=("--cluster-id" "$KAFKA_CLUSTER_ID" "--config" "$final_config_path" "--ignore-formatted")
+  add_scram_credentials
+  # TODO(): Add support for dynamic quorum changes
+  #  https://cwiki.apache.org/confluence/display/KAFKA/KIP-853%3A+KRaft+Controller+Membership+Changes
+
+  # Use the image's class data sharing archive for the storage tool, if it ships one
+  if [[ -f /opt/kafka/storage.jsa ]]; then
+    export KAFKA_JVM_PERFORMANCE_OPTS="${KAFKA_JVM_PERFORMANCE_OPTS:-} -XX:SharedArchiveFile=/opt/kafka/storage.jsa"
   fi
-  echo "current-context: default" >> "$kafkactl_config_path"
+
+  info "** Formatting storage **"
+  "$(kafka_tool kafka-storage)" format "${storage_args[@]}"
+}
+
+# Confluent's own entrypoint scripts build their configuration from KAFKA_* environment variables, so the
+# final configuration is also written as an environment file that launch.sh loads. Properties that can't be
+# expressed as such a variable (e.g. confluent.telemetry.exporter._local.*) go to a properties file that
+# launch.sh appends after Confluent's configure step.
+write_confluent_env() {
+  local env_file="$kafka_config_dir/kafka.env"
+  local extra_file="$kafka_config_dir/kafka-extra.properties"
+  local secrets_dir=/etc/kafka/secrets
+  local key value env_key keystore truststore
+
+  : > "$extra_file.tmp"
+  {
+    write_env CLUSTER_ID "$KAFKA_CLUSTER_ID"
+
+    while IFS= read -r line; do
+      [[ -z "$line" || "$line" == \#* ]] && continue
+      key="${line%%=*}"
+      value="${line#*=}"
+      # Confluent's configure script exits if a controller-only node has advertised listeners.
+      if [[ "$process_roles" == "controller" && "$key" == "advertised.listeners" ]]; then
+        continue
+      fi
+      env_key="$(to_env_key "$key")"
+      if [[ "$(from_env_key "$env_key")" == "$key" ]]; then
+        write_env "$env_key" "$value"
+      else
+        echo "$key=$value" >> "$extra_file.tmp"
+      fi
+    done < "$final_config_path"
+
+    # Confluent's configure script only accepts keystores under /etc/kafka/secrets,
+    # with passwords supplied as files.
+    keystore=$(get_property "$final_config_path" ssl.keystore.location)
+    if [[ -n "$keystore" ]]; then
+      cp "$keystore" "$secrets_dir/"
+      printf '%s' "$(get_property "$final_config_path" ssl.keystore.password)" > "$secrets_dir/keystore_creds"
+      printf '%s' "$(get_property "$final_config_path" ssl.key.password)" > "$secrets_dir/key_creds"
+      write_env KAFKA_SSL_KEYSTORE_FILENAME "$(basename "$keystore")"
+      write_env KAFKA_SSL_KEYSTORE_CREDENTIALS keystore_creds
+      write_env KAFKA_SSL_KEY_CREDENTIALS key_creds
+    fi
+    truststore=$(get_property "$final_config_path" ssl.truststore.location)
+    if [[ -n "$truststore" ]]; then
+      cp "$truststore" "$secrets_dir/"
+      printf '%s' "$(get_property "$final_config_path" ssl.truststore.password)" > "$secrets_dir/truststore_creds"
+      write_env KAFKA_SSL_TRUSTSTORE_FILENAME "$(basename "$truststore")"
+      write_env KAFKA_SSL_TRUSTSTORE_CREDENTIALS truststore_creds
+    fi
+  } > "$env_file.tmp"
+
+  chmod 600 "$env_file.tmp" "$extra_file.tmp"
+  mv "$env_file.tmp" "$env_file"
+  mv "$extra_file.tmp" "$extra_file"
+  info "Wrote Confluent environment file $env_file"
 }
 
 # TODO(): Improve this later
-export KAFKA_SCRAM_256_USERS=${KAFKA_SCRAM_256_USERS:-$KAFKA_USER}
-export KAFKA_SCRAM_256_PASSWORDS=${KAFKA_SCRAM_256_PASSWORDS:-$KAFKA_PASSWORD}
+export KAFKA_SCRAM_256_USERS=${KAFKA_SCRAM_256_USERS:-${KAFKA_USER:-}}
+export KAFKA_SCRAM_256_PASSWORDS=${KAFKA_SCRAM_256_PASSWORDS:-${KAFKA_PASSWORD:-}}
 
 setup_kafka() {
   process_operator_config
@@ -280,10 +345,12 @@ setup_kafka() {
   update_configuration
   remove_comments_and_sort "$final_config_path"
   copy_custom_log4j_if_exists
-  addKafkactlConfig
+  format_storage
+  if is_confluent; then
+    write_confluent_env
+  fi
 }
 
 info "** Starting Kafka setup for KubeDB **"
 setup_kafka
 info "** Kafka setup completed **"
-/opt/kafka/scripts/start.sh "$final_config_path"

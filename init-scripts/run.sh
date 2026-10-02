@@ -5,7 +5,7 @@ set -o nounset
 # set -o pipefail
 # set -o xtrace # Uncomment this line for debugging purposes
 
-cp -r /tmp/scripts/* /opt/kafka/init-scripts
+cp -r /tmp/scripts/* /tmp/jmx_exporter /tmp/libs /opt/kafka/init-scripts
 if [ -n "${TOPOLOGY_KEY:-}" ] && [ -n "${NODE_NAME:-}" ]; then
   TOKEN=$(cat /var/run/secrets/kubernetes.io/serviceaccount/token)
   APISERVER="https://kubernetes.default.svc"
