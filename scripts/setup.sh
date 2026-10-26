@@ -160,7 +160,7 @@ process_operator_config() {
 
   # If KAFKA_PASSWORD is not empty,
   # replace the placeholders <KAFKA_USER> and <KAFKA_PASSWORD> in clientauth.properties and operator_config files
-  if [[ $KAFKA_PASSWORD != "" ]]; then
+  if [[ ${KAFKA_PASSWORD:-} != "" ]]; then
     CLIENTAUTHFILE="$config_dir/clientauth.properties"
     sed -i "s/\<KAFKA_USER\>/"$KAFKA_USER"/g" $CLIENTAUTHFILE
     sed -i "s/\<KAFKA_PASSWORD\>/"$KAFKA_PASSWORD"/g" $CLIENTAUTHFILE
@@ -282,8 +282,8 @@ EOL
 }
 
 # TODO(): Improve this later
-export KAFKA_SCRAM_256_USERS=${KAFKA_SCRAM_256_USERS:-$KAFKA_USER}
-export KAFKA_SCRAM_256_PASSWORDS=${KAFKA_SCRAM_256_PASSWORDS:-$KAFKA_PASSWORD}
+export KAFKA_SCRAM_256_USERS=${KAFKA_SCRAM_256_USERS:-${KAFKA_USER:-}}
+export KAFKA_SCRAM_256_PASSWORDS=${KAFKA_SCRAM_256_PASSWORDS:-${KAFKA_PASSWORD:-}}
 
 setup_kafka() {
   process_operator_config
